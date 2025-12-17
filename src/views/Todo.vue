@@ -24,14 +24,50 @@
           class="task-item"
           :class="{ completed: task.completed }"
         >
-          <input 
-            type="checkbox" 
-            :checked="task.completed"
-            @change="todoStore.toggleTask(task.id)"
-            class="task-checkbox"
-          >
-          <span class="task-text">{{ task.text }}</span>
-          <button @click="todoStore.deleteTask(task.id)" class="delete-btn">×</button>
+
+          <div v-if="todoStore.editingTaskId === task.id" class="edit-mode">
+            <input 
+              v-model="todoStore.editText" 
+              @keyup.enter="todoStore.saveEdit"
+              @keyup.escape="todoStore.cancelEdit"
+              @blur="todoStore.saveEdit"
+              class="edit-input"
+              ref="editInput"
+              autofocus
+            >
+            <div class="edit-buttons">
+              <button @click="todoStore.saveEdit" class="save-btn" title="Сохранить">✓</button>
+              <button @click="todoStore.cancelEdit" class="cancel-btn" title="Отменить">✗</button>
+            </div>
+          </div>
+          
+          <div v-else class="view-mode">
+            <input 
+              type="checkbox" 
+              :checked="task.completed"
+              @change="todoStore.toggleTask(task.id)"
+              class="task-checkbox"
+            >
+            <span class="task-text">
+              {{ task.text }}
+            </span>
+            <div class="task-actions">
+              <button 
+                @click="startEditing(task)" 
+                class="edit-btn"
+                title="Редактировать"
+              >
+                ✏️
+              </button>
+              <button 
+                @click="todoStore.deleteTask(task.id)" 
+                class="delete-btn"
+                title="Удалить"
+              >
+                ×
+              </button>
+            </div>
+          </div>
         </div>
         
         <p v-if="todoStore.filteredTasks.length === 0" class="empty-message">
@@ -43,17 +79,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useTodoStore } from '../stores/todo'
+import { ref, nextTick } from 'vue'
+import { useTodoStore } from '@/stores/todo'
 
 const newTask = ref('')
 const todoStore = useTodoStore()
+const editInput = ref<HTMLInputElement | null>(null)
 
-const addTask = () => {
+const addTask = (): void => {
   if (newTask.value.trim()) {
     todoStore.addTask(newTask.value.trim())
     newTask.value = ''
   }
+}
+
+const startEditing = (task: any): void => {
+  todoStore.startEditing(task)
+  nextTick(() => {
+    editInput.value?.focus()
+    editInput.value?.select()
+  })
 }
 </script>
 
@@ -72,7 +117,7 @@ const addTask = () => {
 }
 
 .dark-theme .todo-card {
-  background: #2c3e50; /* Такой же цвет как в Login.vue */
+  background: #2c3e50;
   color: #f0f0f0;
 }
 
@@ -133,6 +178,7 @@ h1 {
   padding: 1rem;
   border-bottom: 1px solid #f1f3f4;
   transition: background 0.3s ease;
+  min-height: 60px;
 }
 
 .dark-theme .task-item {
@@ -151,6 +197,74 @@ h1 {
   opacity: 0.7;
 }
 
+/* Режим редактирования */
+.edit-mode {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.edit-input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 2px solid #6C63FF;
+  border-radius: 6px;
+  font-size: 1rem;
+  background: white;
+  color: #333;
+}
+
+.dark-theme .edit-input {
+  background: #34495e;
+  border-color: #7b73ff;
+  color: #f0f0f0;
+}
+
+.edit-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.save-btn, .cancel-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.save-btn {
+  background: #4CAF50;
+  color: white;
+}
+
+.save-btn:hover {
+  background: #45a049;
+}
+
+.cancel-btn {
+  background: #ff6b6b;
+  color: white;
+}
+
+.cancel-btn:hover {
+  background: #ff5252;
+}
+
+/* Обычный режим */
+.view-mode {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
 .task-checkbox {
   width: 20px;
   height: 20px;
@@ -160,7 +274,9 @@ h1 {
 .task-text {
   flex: 1;
   font-size: 1rem;
-  color: #c4c0c0ff;
+  color: #333;
+  padding: 5px 0;
+  word-break: break-word;
 }
 
 .dark-theme .task-text {
@@ -169,25 +285,53 @@ h1 {
 
 .task-item.completed .task-text {
   text-decoration: line-through;
-  color: #ddd6d6ff;
+  color: #888;
 }
 
 .dark-theme .task-item.completed .task-text {
   color: #aaa;
 }
 
-.delete-btn {
-  background: #ff6b6b;
-  color: white;
+/* Кнопки действий */
+.task-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.edit-btn, .delete-btn {
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: 50%;
-  width: 30px;
-  height: 30px;
   cursor: pointer;
-  font-size: 1.2rem;
+  font-size: 1rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s;
+}
+
+.edit-btn {
+  background: #FFC107;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.edit-btn:hover {
+  background: #FFB300;
+  transform: scale(1.1);
+}
+
+.delete-btn {
+  background: #ff6b6b;
+  color: white;
+  font-size: 1.2rem;
+}
+
+.delete-btn:hover {
+  background: #ff5252;
+  transform: scale(1.1);
 }
 
 .empty-message {
